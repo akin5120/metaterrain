@@ -6,7 +6,6 @@ function initAR() {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
-    renderer.xr.setReferenceSpaceType('local');
 
     document.body.appendChild(renderer.domElement);
 
@@ -38,12 +37,13 @@ document.getElementById('enter-ar').addEventListener('click', async () => {
         }
 
         const session = await navigator.xr.requestSession('immersive-ar', {
-            requiredFeatures: ['local']
+            requiredFeatures: ['hit-test']
         });
 
-        renderer.xr.setSession(session);
         initAR();
+        renderer.xr.setSession(session);
     } else {
         alert('WebXR not supported');
     }
 });
+ 
