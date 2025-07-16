@@ -43,23 +43,21 @@ function initAR(session) {
             for (const source of session.inputSources) {
                 if (!source.hand) continue;
 
-                for (const jointName of source.hand.keys()) {
-                    const joint = source.hand.get(jointName);
-                    const jointPose = frame.getJointPose(joint, referenceSpace);
+                const indexTip = source.hand.get('index-finger-tip');
+                const thumbTip = source.hand.get('thumb-tip');
 
-                    if (jointPose) {
-                        let mesh = jointMeshes[jointName];
-                        if (!mesh) {
-                            mesh = createJointMesh();
-                            scene.add(mesh);
-                            jointMeshes[jointName] = mesh;
-                        }
-                        mesh.visible = true;
-                        mesh.position.set(
-                            jointPose.transform.position.x,
-                            jointPose.transform.position.y,
-                            jointPose.transform.position.z
-                        );
+                const indexPose = frame.getJointPose(indexTip, referenceSpace);
+                const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
+
+                if (indexPose && thumbPose) {
+                    const dx = indexPose.transform.position.x - thumbPose.transform.position.x;
+                    const dy = indexPose.transform.position.y - thumbPose.transform.position.y;
+                    const dz = indexPose.transform.position.z - thumbPose.transform.position.z;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                    if (distance < 0.02) { // Adjust this threshold as needed
+                        console.log('[PINCH] Detected pinch gesture');
+                        // You can spawn or trigger something here
                     }
                 }
             }
@@ -67,6 +65,7 @@ function initAR(session) {
 
         renderer.render(scene, camera);
     });
+
 }
 
 // AR Button Click Handler
