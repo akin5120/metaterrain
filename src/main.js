@@ -1,13 +1,9 @@
 import * as THREE from 'three';
 
 let scene, camera, renderer;
-const jointMeshes = {}; // To hold fingertip spheres
-
-function createJointMesh() {
-    const geometry = new THREE.SphereGeometry(0.01, 8, 8);
-    const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    return new THREE.Mesh(geometry, material);
-}
+let cube;
+let isGrabbing = false;
+let grabbingHandedness = null;
 
 function initAR(session) {
     // Renderer
@@ -26,49 +22,64 @@ function initAR(session) {
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
 
-    // Flat green plane for reference
-    const geometry = new THREE.PlaneGeometry(1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const plane = new THREE.Mesh(geometry, material);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.set(0, 0, -0.5);
-    scene.add(plane);
+    // Cube to grab
+    const cubeGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+    const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0x0077ff });
+    cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    cube.position.set(0, 0, -0.5); // In front of the user
+    scene.add(cube);
 
     // Render loop
     renderer.setAnimationLoop((timestamp, frame) => {
-        if (frame) {
-            const session = renderer.xr.getSession();
-            const referenceSpace = renderer.xr.getReferenceSpace();
+        if (!frame) return;
 
-            for (const source of session.inputSources) {
-                if (!source.hand) continue;
+        const session = renderer.xr.getSession();
+        const referenceSpace = renderer.xr.getReferenceSpace();
 
-                const indexTip = source.hand.get('index-finger-tip');
-                const thumbTip = source.hand.get('thumb-tip');
+        for (const source of session.inputSources) {
+            if (!source.hand) continue;
 
-                const indexPose = frame.getJointPose(indexTip, referenceSpace);
-                const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
+            const indexTip = source.hand.get('index-finger-tip');
+            const thumbTip = source.hand.get('thumb-tip');
+            const indexPose = frame.getJointPose(indexTip, referenceSpace);
+            const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
 
-                if (indexPose && thumbPose) {
-                    const dx = indexPose.transform.position.x - thumbPose.transform.position.x;
-                    const dy = indexPose.transform.position.y - thumbPose.transform.position.y;
-                    const dz = indexPose.transform.position.z - thumbPose.transform.position.z;
-                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (!indexPose || !thumbPose) continue;
 
-                    if (distance < 0.02) { // Adjust this threshold as needed
-                        console.log('[PINCH] Detected pinch gesture');
-                        // You can spawn or trigger something here
-                    }
-                }
+            const dx = indexPose.transform.position.x - thumbPose.transform.position.x;
+            const dy = indexPose.transform.position.y - thumbPose.transform.position.y;
+            const dz = indexPose.transform.position.z - thumbPose.transform.position.z;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+            const pinch = distance < 0.02;
+
+            if (pinch && !isGrabbing) {
+                isGrabbing = true;
+                grabbingHandedness = source.handedness;
+                console.log('[PINCH] Grab started');
+            }
+
+            if (!pinch && isGrabbing && source.handedness === grabbingHandedness) {
+                isGrabbing = false;
+                grabbingHandedness = null;
+                console.log('[PINCH] Grab released');
+            }
+
+            // While grabbing, move cube with fingertip
+            if (isGrabbing && source.handedness === grabbingHandedness) {
+                cube.position.set(
+                    indexPose.transform.position.x,
+                    indexPose.transform.position.y,
+                    indexPose.transform.position.z
+                );
             }
         }
 
         renderer.render(scene, camera);
     });
-
 }
 
-// AR Button Click Handler
+// AR Button Click
 document.getElementById('enter-ar').addEventListener('click', async () => {
     if (!navigator.xr) {
         alert('WebXR not supported');
@@ -76,7 +87,6 @@ document.getElementById('enter-ar').addEventListener('click', async () => {
     }
 
     const supported = await navigator.xr.isSessionSupported('immersive-ar');
-    console.log('immersive-ar supported:', supported);
     if (!supported) {
         alert('AR not supported on this device');
         return;
